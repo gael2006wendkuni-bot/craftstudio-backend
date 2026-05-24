@@ -495,49 +495,86 @@ function submitForm(){
 // TOAST
 function showToast(msg){const t=document.getElementById('toast');t.innerHTML=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);}
 
-// PORTFOLIO
-let projects=[
-  {nom:'AutoLuxe Showroom',cat:'Concession automobile',tech:'HTML · CSS · JavaScript · Node.js',img:'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=700&q=80',url:'#'},
-  {nom:'Le Baobab',cat:'Restaurant',tech:'HTML · CSS · JavaScript',img:'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=700&q=80',url:'#'},
-  {nom:'Clinique Santé Plus',cat:'Santé',tech:'HTML · CSS · PHP',img:'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=700&q=80',url:'#'},
-];
+// ─── PORTFOLIO — connecté au backend ───────────────────────────────────────
+const API = 'https://craftstudio-backend-sex9.onrender.com';
 
-function renderPortfolio(){
-  const grid=document.getElementById('portfolioGrid');
-  grid.innerHTML=projects.map(p=>`
-    <div class="projet" onclick="window.open('${p.url||'#'}','_blank')">
-      <img class="projet-img" src="${p.img||'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=700&q=80'}" alt="${p.nom}" loading="lazy">
+async function loadPortfolio() {
+  try {
+    const res = await fetch(API + '/api/projets');
+    const data = await res.json();
+    if (data.success) renderPortfolio(data.projets);
+  } catch (err) {
+    console.warn('Backend non disponible, affichage local');
+    renderPortfolio([
+      {id:1,nom:'AutoLuxe Showroom',cat:'Concession automobile',tech:'HTML · CSS · JavaScript · Node.js',img:'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=700&q=80',url:'#'},
+      {id:2,nom:'Le Baobab',cat:'Restaurant',tech:'HTML · CSS · JavaScript',img:'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=700&q=80',url:'#'},
+      {id:3,nom:'Clinique Santé Plus',cat:'Santé',tech:'HTML · CSS · PHP',img:'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=700&q=80',url:'#'},
+    ]);
+  }
+}
+
+function renderPortfolio(projects) {
+  const grid = document.getElementById('portfolioGrid');
+  grid.innerHTML = projects.map(p => `
+    <div class="projet">
+      <img class="projet-img" src="${p.img||'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=700&q=80'}" alt="${p.nom}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=700&q=80'">
       <div class="projet-overlay">
         <div class="projet-cat">${p.cat}</div>
         <div class="projet-name">${p.nom}</div>
         <div class="projet-tech">${p.tech}</div>
       </div>
-      <div class="projet-hover"><button class="projet-hover-btn">Voir le projet</button></div>
+      <div class="projet-hover">
+        <button class="projet-hover-btn" onclick="window.open('${p.url||'#'}','_blank')">Voir le projet</button>
+        <button class="projet-hover-btn" style="background:#8B0000;margin-top:.5rem" onclick="deleteProject(event,${p.id})">Supprimer</button>
+      </div>
     </div>
-  `).join('')+`
+  `).join('') + `
     <div class="portfolio-add" onclick="openAddModal()">
       <span style="font-size:2rem;color:var(--accent)">+</span>
       <span>Ajouter un projet</span>
     </div>`;
 }
 
+async function deleteProject(e, id) {
+  e.stopPropagation();
+  if (!confirm('Supprimer ce projet ?')) return;
+  try {
+    const res = await fetch(API + '/api/projets/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast('Projet supprimé'); loadPortfolio(); }
+    else showToast('Erreur suppression');
+  } catch { showToast('Erreur réseau'); }
+}
+
 function openAddModal(){document.getElementById('addModal').classList.add('open');document.body.style.overflow='hidden';}
 function closeAddModal(){document.getElementById('addModal').classList.remove('open');document.body.style.overflow='';}
 function closeAddModalOut(e){if(e.target===document.getElementById('addModal'))closeAddModal();}
 
-function addProject(){
-  const nom=document.getElementById('pNom').value;
-  const cat=document.getElementById('pCat').value;
-  const tech=document.getElementById('pTech').value;
-  const img=document.getElementById('pImg').value;
-  const url=document.getElementById('pUrl').value;
-  if(!nom||!cat){showToast('Nom et catégorie obligatoires');return;}
-  projects.push({nom,cat,tech:tech||'Web',img:img||'',url:url||'#'});
-  renderPortfolio();
-  closeAddModal();
-  showToast('<b>Projet ajouté</b> au portfolio !');
-  ['pNom','pCat','pTech','pImg','pUrl'].forEach(id=>document.getElementById(id).value='');
+async function addProject() {
+  const nom = document.getElementById('pNom').value;
+  const cat = document.getElementById('pCat').value;
+  const tech = document.getElementById('pTech').value;
+  const img = document.getElementById('pImg').value;
+  const url = document.getElementById('pUrl').value;
+  if (!nom || !cat) { showToast('Nom et catégorie obligatoires'); return; }
+  try {
+    const res = await fetch(API + '/api/projets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom, cat, tech: tech||'Web', img, url })
+    });
+    const data = await res.json();
+    if (data.success) {
+      loadPortfolio();
+      closeAddModal();
+      showToast('<b>Projet sauvegardé</b> dans la base de données !');
+      ['pNom','pCat','pTech','pImg','pUrl'].forEach(id => document.getElementById(id).value = '');
+    } else showToast('Erreur : ' + data.error);
+  } catch { showToast('Erreur réseau — backend non disponible'); }
 }
+
+// Démarrage
+loadPortfolio();
 </script>
 </body>
 </html>
